@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QuizGenius — PDF to Quiz</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#6c63ff"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="QuizGenius"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#07071a;--card:#111132;--card2:#161640;
+      --border:rgba(108,99,255,.22);--accent:#6c63ff;
+      --accent2:#ff6b9d;--accent3:#00d4aa;
+      --text:#e8e6ff;--muted:#7b7a9e;
+      --ok:#00d4aa;--bad:#ff4d6d;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+      background:radial-gradient(ellipse 70% 60% at 15% 10%,rgba(108,99,255,.13) 0%,transparent 60%),
+                 radial-gradient(ellipse 55% 45% at 85% 85%,rgba(255,107,157,.09) 0%,transparent 55%)}
+    .orb{position:fixed;border-radius:50%;filter:blur(90px);opacity:.2;pointer-events:none;z-index:0;animation:float 9s ease-in-out infinite}
+    .o1{width:400px;height:400px;background:var(--accent);top:-150px;left:-100px}
+    .o2{width:300px;height:300px;background:var(--accent2);bottom:-100px;right:-100px;animation-delay:-4s}
+    @keyframes float{0%,100%{transform:translate(0,0)}40%{transform:translate(20px,-15px)}70%{transform:translate(-12px,10px)}}
+
+    /* ── Screens ── */
+    .screen{display:none;position:relative;z-index:1;min-height:100vh;padding:28px 20px;flex-direction:column;align-items:center;justify-content:center}
+    .screen.active{display:flex;animation:fadeUp .4s ease}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── Upload ── */
+    .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(2.2rem,6vw,3.5rem);letter-spacing:-2px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:6px;text-align:center}
+    .tagline{color:var(--muted);font-size:.95rem;font-weight:300;margin-bottom:40px;text-align:center}
+
+    .ucard{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:36px;width:100%;max-width:500px;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+
+    .drop{border:2px dashed var(--border);border-radius:16px;padding:44px 24px;cursor:pointer;transition:all .3s;background:rgba(108,99,255,.03);text-align:center;position:relative}
+    .drop:hover,.drop.over{border-color:var(--accent);background:rgba(108,99,255,.09);box-shadow:0 0 32px rgba(108,99,255,.22)}
+    .drop-icon{font-size:3rem;display:block;margin-bottom:12px;animation:bob 2.2s ease-in-out infinite}
+    @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    .drop h3{font-family:'Syne',sans-serif;font-weight:700;font-size:1.1rem;margin-bottom:5px}
+    .drop p{color:var(--muted);font-size:.87rem}
+    #file-input{display:none}
+
+    .file-pill{display:none;margin-top:18px;padding:11px 16px;background:rgba(0,212,170,.09);border:1px solid rgba(0,212,170,.28);border-radius:10px;font-size:.87rem;color:var(--accent3);align-items:center;gap:8px;word-break:break-all}
+    .file-pill.show{display:flex}
+
+    /* Install button on upload screen */
+    .install-row{display:none;align-items:center;justify-content:center;gap:10px;margin-top:20px;padding:12px 16px;background:rgba(108,99,255,.08);border:1px solid rgba(108,99,255,.25);border-radius:12px;cursor:pointer;transition:all .25s}
+    .install-row:hover{background:rgba(108,99,255,.16);border-color:var(--accent)}
+    .install-row.show{display:flex}
+    .install-row span{font-size:.9rem;color:var(--text);font-weight:500}
+    .install-icon{font-size:1.2rem}
+
+    .btn-gen{margin-top:20px;width:100%;padding:16px;border:none;border-radius:100px;background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;font-family:'DM Sans',sans-serif;font-weight:700;font-size:1rem;cursor:pointer;box-shadow:0 8px 32px rgba(108,99,255,.42);transition:all .25s;letter-spacing:.3px}
+    .btn-gen:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 14px 40px rgba(108,99,255,.6)}
+    .btn-gen:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+    /* ── Loading overlay ── */
+    #loading{display:none;position:fixed;inset:0;background:rgba(7,7,26,.97);z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:22px;backdrop-filter:blur(12px)}
+    #loading.show{display:flex}
+    .spin{width:60px;height:60px;position:relative}
+    .spin::before,.spin::after{content:'';position:absolute;border-radius:50%}
+    .spin::before{inset:0;border:3px solid rgba(108,99,255,.15)}
+    .spin::after{inset:0;border:3px solid transparent;border-top-color:var(--accent);border-right-color:var(--accent2);animation:spin .75s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .load-title{font-family:'Syne',sans-serif;font-weight:700;font-size:1.15rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .load-sub{color:var(--muted);font-size:.85rem;margin-top:-10px}
+    .steps{list-style:none;display:flex;flex-direction:column;gap:9px;width:270px}
+    .step{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:var(--card2);border:1px solid var(--border);font-size:.87rem;color:var(--muted);transition:all .4s}
+    .step.on{border-color:var(--accent);color:var(--text);box-shadow:0 0 18px rgba(108,99,255,.2)}
+    .step.done{border-color:var(--ok);color:var(--ok)}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:all .3s}
+    .step.on .dot{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+    .step.done .dot{background:var(--ok)}
+
+    /* ── Quiz screen ── */
+    #quiz-screen{padding-top:70px;padding-bottom:80px}
+    .qheader{width:100%;max-width:680px;margin-bottom:22px}
+    .qmeta{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+    .qcounter{font-family:'Syne',sans-serif;font-weight:700;font-size:.83rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+    .sbadge{background:var(--card2);border:1px solid var(--border);border-radius:100px;padding:5px 16px;font-size:.82rem;font-weight:600;color:var(--accent)}
+    .ptrack{width:100%;height:7px;background:rgba(255,255,255,.06);border-radius:100px;overflow:hidden}
+    .pfill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:100px;transition:width .55s cubic-bezier(.4,0,.2,1);box-shadow:0 0 10px rgba(108,99,255,.45)}
+
+    .qcard{width:100%;max-width:680px;background:var(--card);border:1px solid var(--border);border-radius:24px;padding:32px;box-shadow:0 20px 70px rgba(0,0,0,.32);animation:cardIn .38s cubic-bezier(.4,0,.2,1)}
+    @keyframes cardIn{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
+    .qnum{font-size:.7rem;font-weight:700;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+    .qtext{font-family:'Syne',sans-serif;font-weight:600;font-size:clamp(1rem,2.5vw,1.2rem);line-height:1.55;margin-bottom:24px}
+
+    .opts{display:flex;flex-direction:column;gap:10px}
+    .opt{display:flex;align-items:flex-start;gap:12px;padding:14px 17px;background:rgba(255,255,255,.025);border:1.5px solid rgba(255,255,255,.07);border-radius:13px;cursor:pointer;text-align:left;width:100%;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.92rem;line-height:1.5;transition:all .2s}
+    .opt:hover:not(:disabled){border-color:var(--accent);transform:translateX(4px);box-shadow:-4px 0 0 var(--accent)}
+    .olbl{width:32px;height:32px;min-width:32px;border-radius:8px;background:rgba(108,99,255,.14);border:1px solid rgba(108,99,255,.28);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;color:var(--accent);transition:all .2s}
+    .otxt{padding-top:4px}
+    .opt.correct{border-color:var(--ok);background:rgba(0,212,170,.08);animation:pulseOk .4s ease}
+    .opt.correct .olbl{background:var(--ok);border-color:var(--ok);color:#07071a}
+    .opt.wrong{border-color:var(--bad);background:rgba(255,77,109,.08);animation:shk .4s ease}
+    .opt.wrong .olbl{background:var(--bad);border-color:var(--bad);color:#fff}
+    .opt.reveal{border-color:var(--ok);background:rgba(0,212,170,.04)}
+    .opt.reveal .olbl{background:rgba(0,212,170,.18);border-color:var(--ok);color:var(--ok)}
+    .opt:disabled{cursor:not-allowed}
+    @keyframes pulseOk{0%{box-shadow:0 0 0 0 rgba(0,212,170,.6)}70%{box-shadow:0 0 0 12px rgba(0,212,170,0)}100%{box-shadow:0 0 0 0 rgba(0,212,170,0)}}
+    @keyframes shk{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+
+    .fb{display:none;margin-top:18px;padding:14px 17px;border-radius:12px;gap:11px;align-items:flex-start}
+    .fb.show{display:flex;animation:fadeUp .3s ease}
+    .fb.ok{background:rgba(0,212,170,.09);border:1px solid rgba(0,212,170,.28)}
+    .fb.bad{background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.28)}
+    .fb-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px}
+    .fb-status{font-weight:700;font-size:.87rem;margin-bottom:3px}
+    .fb.ok .fb-status{color:var(--ok)}
+    .fb.bad .fb-status{color:var(--bad)}
+    .fb-exp{color:var(--muted);font-size:.84rem;line-height:1.6}
+
+    .next-wrap{margin-top:20px;display:flex;justify-content:flex-end}
+    .btn-next{display:none;align-items:center;gap:8px;padding:12px 28px;background:linear-gradient(135deg,var(--accent),#8b5cf6);border:none;border-radius:100px;color:#fff;font-family:'DM Sans',sans-serif;font-weight:700;font-size:.92rem;cursor:pointer;box-shadow:0 8px 22px rgba(108,99,255,.38);transition:all .25s}
+    .btn-next.show{display:flex}
+    .btn-next:hover{transform:translateX(4px);box-shadow:0 12px 30px rgba(108,99,255,.55)}
+
+    /* ── Results ── */
+    .rcard{width:100%;max-width:500px;text-align:center}
+    .trophy{font-size:4.5rem;margin-bottom:6px;animation:drop .6s cubic-bezier(.175,.885,.32,1.275)}
+    @keyframes drop{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+    .rtitle{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(1.7rem,4vw,2.5rem);background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:5px}
+    .rsub{color:var(--muted);margin-bottom:32px;font-size:.95rem}
+
+    .ring-wrap{width:150px;height:150px;margin:0 auto 26px;position:relative}
+    .ring-wrap svg{width:100%;height:100%;transform:rotate(-90deg)}
+    .rbg{fill:none;stroke:rgba(255,255,255,.06);stroke-width:8}
+    .rfg{fill:none;stroke-width:8;stroke:url(#rg);stroke-linecap:round;stroke-dasharray:408;stroke-dashoffset:408;transition:stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1) .2s}
+    .rcenter{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .rscore{font-family:'Syne',sans-serif;font-weight:800;font-size:2rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1}
+    .rlbl{color:var(--muted);font-size:.73rem;margin-top:2px}
+
+    .stats{display:flex;gap:12px;justify-content:center;margin-bottom:32px}
+    .stat{flex:1;max-width:130px;padding:12px 14px;background:var(--card2);border:1px solid var(--border);border-radius:12px}
+    .stat .v{font-family:'Syne',sans-serif;font-weight:700;font-size:1.3rem}
+    .stat.c .v{color:var(--ok)}
+    .stat.w .v{color:var(--bad)}
+    .stat.p .v{color:var(--accent)}
+    .stat .l{font-size:.73rem;color:var(--muted);margin-top:2px}
+
+    .ract{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+    .btn-out{padding:12px 24px;border-radius:100px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:'DM Sans',sans-serif;font-weight:600;font-size:.9rem;cursor:pointer;transition:all .2s}
+    .btn-out:hover{border-color:var(--accent);color:var(--accent)}
+
+    /* ── Toast ── */
+    .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(14px);background:rgba(255,77,109,.15);border:1px solid rgba(255,77,109,.4);border-radius:12px;padding:13px 20px;color:#ff6b80;font-size:.87rem;z-index:500;opacity:0;transition:all .3s;max-width:380px;width:calc(100% - 40px);text-align:center;pointer-events:none;line-height:1.5}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+    /* ── PWA Install banner (bottom) ── */
+    #pwa-banner{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:14px 20px;z-index:400;align-items:center;gap:12px;box-shadow:0 -8px 32px rgba(0,0,0,.4)}
+    #pwa-banner.show{display:flex}
+    .pwa-icon{font-size:1.8rem;flex-shrink:0}
+    .pwa-text{flex:1}
+    .pwa-text strong{display:block;color:var(--text);font-size:.95rem;margin-bottom:2px}
+    .pwa-text span{color:var(--muted);font-size:.78rem}
+    .btn-pwa-install{padding:10px 20px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:100px;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    .btn-pwa-dismiss{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;line-height:1;flex-shrink:0;padding:4px}
+
+    @media(max-width:480px){
+      .ucard,.qcard{padding:22px 16px}
+      .opt{padding:12px 12px}
+    }
+  </style>
+</head>
+<body>
+<div class="orb o1"></div>
+<div class="orb o2"></div>
+
+<!-- ══ UPLOAD ══ -->
+<div id="upload-screen" class="screen active">
+  <div class="logo">QuizGenius</div>
+  <p class="tagline">Upload any PDF. Get 10 MCQs per page instantly.</p>
+
+  <div class="ucard">
+    <div class="drop" id="drop-zone">
+      <span class="drop-icon">📄</span>
+      <h3>Drop your PDF here</h3>
+      <p>or click to browse — any size PDF works</p>
+      <input type="file" id="file-input" accept="application/pdf"/>
+    </div>
+
+    <div class="file-pill" id="file-pill">📎 <span id="fname"></span></div>
+
+    <!-- PWA install row inside card -->
+    <div class="install-row" id="install-row" onclick="triggerInstall()">
+      <span class="install-icon">📲</span>
+      <span>Install app on your phone</span>
+    </div>
+
+    <button class="btn-gen" id="gen-btn" disabled>⚡ Generate Quiz</button>
+  </div>
+</div>
+
+<!-- ══ QUIZ ══ -->
+<div id="quiz-screen" class="screen">
+  <div class="qheader">
+    <div class="qmeta">
+      <span class="qcounter" id="qcounter">Question 1 / 10</span>
+      <span class="sbadge" id="sbadge">Score: 0</span>
+    </div>
+    <div class="ptrack"><div class="pfill" id="pfill" style="width:0%"></div></div>
+  </div>
+  <div class="qcard" id="qcard">
+    <div class="qnum" id="qnum">QUESTION 1</div>
+    <div class="qtext" id="qtext"></div>
+    <div class="opts" id="opts"></div>
+    <div class="fb" id="fb">
+      <span class="fb-icon" id="fb-icon"></span>
+      <div>
+        <div class="fb-status" id="fb-status"></div>
+        <div class="fb-exp" id="fb-exp"></div>
+      </div>
+    </div>
+    <div class="next-wrap"><button class="btn-next" id="btn-next">Next →</button></div>
+  </div>
+</div>
+
+<!-- ══ RESULTS ══ -->
+<div id="result-screen" class="screen">
+  <div class="rcard">
+    <div class="trophy" id="trophy">🏆</div>
+    <div class="rtitle" id="rtitle">Great Job!</div>
+    <p class="rsub" id="rsub">Here's how you did</p>
+    <div class="ring-wrap">
+      <svg viewBox="0 0 150 150">
+        <defs>
+          <linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#6c63ff"/>
+            <stop offset="100%" style="stop-color:#ff6b9d"/>
+          </linearGradient>
+        </defs>
+        <circle class="rbg" cx="75" cy="75" r="65"/>
+        <circle class="rfg" id="rfg" cx="75" cy="75" r="65"/>
+      </svg>
+      <div class="rcenter">
+        <div class="rscore" id="rscore">0/0</div>
+        <div class="rlbl">Score</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat c"><div class="v" id="sc">0</div><div class="l">Correct</div></div>
+      <div class="stat w"><div class="v" id="sw">0</div><div class="l">Wrong</div></div>
+      <div class="stat p"><div class="v" id="sp">0%</div><div class="l">Accuracy</div></div>
+    </div>
+    <div class="ract">
+      <button class="btn-out" id="btn-restart">↺ Restart Quiz</button>
+      <button class="btn-out" id="btn-new">📄 New PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spin"></div>
+  <div class="load-title">Generating your quiz…</div>
+  <div class="load-sub" id="load-sub">Reading PDF…</div>
+  <ul class="steps">
+    <li class="step" id="s1"><span class="dot"></span> Reading PDF</li>
+    <li class="step" id="s2"><span class="dot"></span> Extracting text</li>
+    <li class="step" id="s3"><span class="dot"></span> AI writing questions</li>
+    <li class="step" id="s4"><span class="dot"></span> Preparing quiz</li>
+  </ul>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast-el"></div>
+
+<!-- PWA Install banner -->
+<div id="pwa-banner">
+  <span class="pwa-icon">📲</span>
+  <div class="pwa-text">
+    <strong>Install QuizGenius</strong>
+    <span>Add to home screen for quick access</span>
+  </div>
+  <button class="btn-pwa-install" onclick="triggerInstall()">Install</button>
+  <button class="btn-pwa-dismiss" onclick="dismissBanner()">✕</button>
+</div>
+
+<script>
+// ── DOM ───────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const SCREENS = {upload:$('upload-screen'),quiz:$('quiz-screen'),result:$('result-screen')};
+
+function show(name){
+  Object.values(SCREENS).forEach(s=>s.classList.remove('active'));
+  SCREENS[name].classList.add('active');
+}
+
+function toast(msg,ms=5000){
+  const t=$('toast-el');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),ms);
+}
+
+// ── Loading steps ─────────────────────────────────────────────────────
+const STEP_IDS=['s1','s2','s3','s4'];
+let timers=[];
+function startSteps(){
+  STEP_IDS.forEach(id=>$(id).className='step');
+  STEP_IDS.forEach((id,i)=>{
+    timers.push(setTimeout(()=>{
+      if(i>0) $(STEP_IDS[i-1]).className='step done';
+      $(id).className='step on';
+    },i*1800));
+  });
+}
+function stopSteps(){
+  timers.forEach(clearTimeout);timers=[];
+  STEP_IDS.forEach(id=>$(id).className='step done');
+}
+
+// ── File pick ─────────────────────────────────────────────────────────
+let selectedFile=null;
+const dropZone=$('drop-zone');
+const fileInput=$('file-input');
+
+dropZone.addEventListener('click',()=>fileInput.click());
+fileInput.addEventListener('change',e=>{if(e.target.files[0])pick(e.target.files[0]);});
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('over');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('over'));
+dropZone.addEventListener('drop',e=>{
+  e.preventDefault();dropZone.classList.remove('over');
+  const f=e.dataTransfer.files[0];
+  if(f?.type==='application/pdf') pick(f);
+  else toast('⚠️ Please drop a valid PDF file');
+});
+
+function pick(f){
+  selectedFile=f;
+  $('fname').textContent=`${f.name} (${(f.size/1024/1024).toFixed(1)} MB)`;
+  $('file-pill').classList.add('show');
+  $('gen-btn').disabled=false;
+}
+
+// ── Generate ──────────────────────────────────────────────────────────
+let questions=[],idx=0,score=0,answered=false;
+
+$('gen-btn').addEventListener('click',async()=>{
+  if(!selectedFile) return toast('Please select a PDF first');
+
+  $('loading').classList.add('show');
+  startSteps();
+
+  const form=new FormData();
+  form.append('pdf',selectedFile);
+
+  try{
+    const res=await fetch('/generate-mcq',{method:'POST',body:form});
+    const data=await res.json();
+
+    if(!res.ok) throw new Error(data.error||`Server error ${res.status}`);
+    if(!data.questions?.length) throw new Error('No questions generated. Try another PDF.');
+
+    questions=data.questions;
+    stopSteps();
+    setTimeout(()=>{$('loading').classList.remove('show');startQuiz();},400);
+
+  }catch(err){
+    $('loading').classList.remove('show');
+    stopSteps();
+    toast('❌ '+( err.message||'Something went wrong. Please try again.'));
+  }
+});
+
+// ── Quiz ──────────────────────────────────────────────────────────────
+function startQuiz(){
+  idx=0;score=0;answered=false;
+  show('quiz');
+  renderQ();
+}
+
+function renderQ(){
+  const q=questions[idx],total=questions.length;
+  $('qcounter').textContent=`Question ${idx+1} / ${total}`;
+  $('sbadge').textContent=`Score: ${score}`;
+  $('pfill').style.width=`${(idx/total)*100}%`;
+  $('qnum').textContent=`QUESTION ${idx+1}`;
+  $('qtext').textContent=q.question;
+
+  const opts=$('opts');
+  opts.innerHTML='';
+  answered=false;
+
+  q.options.forEach((opt,i)=>{
+    const ltr='ABCD'[i];
+    const txt=opt.replace(/^[A-D]\.\s*/,'');
+    const btn=document.createElement('button');
+    btn.className='opt';
+    btn.dataset.ltr=ltr;
+    btn.innerHTML=`<span class="olbl">${ltr}</span><span class="otxt">${txt}</span>`;
+    btn.addEventListener('click',()=>answer(btn,ltr,q));
+    opts.appendChild(btn);
+  });
+
+  $('fb').className='fb';
+  $('btn-next').className='btn-next';
+
+  const c=$('qcard');
+  c.style.animation='none';c.offsetHeight;
+  c.style.animation='cardIn .38s cubic-bezier(.4,0,.2,1)';
+}
+
+function answer(btn,ltr,q){
+  if(answered) return;
+  answered=true;
+  const ok=ltr===q.correct;
+  if(ok) score++;
+
+  document.querySelectorAll('.opt').forEach(b=>{
+    b.disabled=true;
+    if(b.dataset.ltr===q.correct&&b!==btn) b.classList.add('reveal');
+  });
+  btn.classList.add(ok?'correct':'wrong');
+
+  const fb=$('fb');
+  fb.className='fb show '+(ok?'ok':'bad');
+  $('fb-icon').textContent=ok?'✅':'❌';
+  $('fb-status').textContent=ok?'Correct!':'Wrong — correct answer: '+q.correct;
+  $('fb-exp').textContent=q.explanation||'';
+  $('sbadge').textContent=`Score: ${score}`;
+  $('btn-next').className='btn-next show';
+}
+
+$('btn-next').addEventListener('click',()=>{
+  if(++idx>=questions.length) showResults();
+  else renderQ();
+});
+
+// ── Results ───────────────────────────────────────────────────────────
+function showResults(){
+  const total=questions.length,pct=Math.round((score/total)*100);
+  show('result');
+
+  const[em,ti,sub]=pct>=90?['🏆','Outstanding!','You absolutely crushed it!']
+    :pct>=70?['🎯','Great Job!','Solid performance, keep it up!']
+    :pct>=50?['💪','Good Effort!','Review and try again!']
+    :['📚','Keep Studying!','Practice makes perfect!'];
+
+  $('trophy').textContent=em;
+  $('rtitle').textContent=ti;
+  $('rsub').textContent=sub;
+  $('rscore').textContent=`${score}/${total}`;
+  $('sc').textContent=score;
+  $('sw').textContent=total-score;
+  $('sp').textContent=pct+'%';
+
+  const circ=2*Math.PI*65;
+  setTimeout(()=>$('rfg').style.strokeDashoffset=circ-(pct/100)*circ,100);
+  $('pfill').style.width='100%';
+}
+
+$('btn-restart').addEventListener('click',startQuiz);
+$('btn-new').addEventListener('click',()=>{
+  questions=[];selectedFile=null;
+  fileInput.value='';
+  $('file-pill').classList.remove('show');
+  $('gen-btn').disabled=true;
+  $('rfg').style.strokeDashoffset=408;
+  show('upload');
+});
+
+// ── PWA Install ───────────────────────────────────────────────────────
+let deferredPrompt=null;
+
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredPrompt=e;
+  // Show both the install row inside card and the bottom banner
+  $('install-row').classList.add('show');
+  setTimeout(()=>$('pwa-banner').classList.add('show'),2000);
+});
+
+function triggerInstall(){
+  if(!deferredPrompt){
+    // iOS fallback
+    toast('📱 On iPhone: tap the Share button → "Add to Home Screen"');
+    return;
+  }
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(()=>{
+    deferredPrompt=null;
+    $('install-row').classList.remove('show');
+    $('pwa-banner').classList.remove('show');
+  });
+}
+
+function dismissBanner(){
+  $('pwa-banner').classList.remove('show');
+}
+
+window.addEventListener('appinstalled',()=>{
+  deferredPrompt=null;
+  $('install-row').classList.remove('show');
+  $('pwa-banner').classList.remove('show');
+  toast('✅ QuizGenius installed successfully!');
+});
+
+// ── Service Worker ────────────────────────────────────────────────────
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
